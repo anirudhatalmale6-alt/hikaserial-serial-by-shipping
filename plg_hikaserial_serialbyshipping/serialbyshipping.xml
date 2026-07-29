@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <extension type="plugin" group="hikaserial" method="upgrade">
-	<name>plg_hikaserial_serialbyshipping</name>
+	<name>Serials by Shipping - HikaSerial plugin</name>
 	<author>Anirudha Talmale</author>
 	<creationDate>2026-07</creationDate>
-	<version>1.1.0</version>
+	<version>1.2.0</version>
 	<description>PLG_HIKASERIAL_SERIALBYSHIPPING_DESC</description>
 
 	<files>

@@ -1,7 +1,7 @@
 <?php
 /**
  * @package     plg_hikaserial_serialbyshipping
- * @version     1.1.0
+ * @version     1.2.0
  * @author      Anirudha Talmale
  * @license     GNU General Public License version 3 or later
  *
@@ -28,14 +28,39 @@
 
 defined('_JEXEC') or die('Restricted access');
 
-use Joomla\CMS\Plugin\CMSPlugin;
 use Joomla\CMS\Factory;
 use Joomla\CMS\Log\Log;
 
-class plgHikaserialSerialbyshipping extends CMSPlugin
+// This is a native HikaSerial plugin (like pdfserial / serialperorder), so it
+// extends hikaserialPlugin — that way HikaSerial's own plugin manager recognises
+// it instead of showing "the plugin is not an HikaSerial one". In normal use
+// HikaSerial has already bootstrapped its autoloader before it dispatches to this
+// plugin; the include below is only a safety net for the rare load order.
+if (!class_exists('hikaserialPlugin')) {
+	$hikaserialHelper = rtrim(JPATH_ADMINISTRATOR, '/\\') . '/components/com_hikaserial/helpers/helper.php';
+	if (is_file($hikaserialHelper)) {
+		include_once $hikaserialHelper;
+	}
+}
+
+class plgHikaserialSerialbyshipping extends hikaserialPlugin
 {
-	/** @var bool Load plugin language automatically. */
-	protected $autoloadLanguage = true;
+	/** @var string HikaSerial plugin type. 'plugin' = generic event plugin, so
+	 *   it does NOT appear as a generator/consumer/subscriber option. */
+	protected $type = 'plugin';
+
+	/** @var bool Only one instance of this plugin is needed. */
+	protected $multiple = false;
+
+	/** @var string Documentation form key (HikaSerial convention). */
+	protected $doc_form = 'serialbyshipping-';
+
+	public function __construct(&$subject, $config)
+	{
+		parent::__construct($subject, $config);
+		// Load this plugin's own language strings (admin labels).
+		$this->loadLanguage();
+	}
 
 	/**
 	 * GENERATION GATE. Fired by HikaSerial in class.order::preUpdate(), right
