@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<extension type="plugin" group="hikaserial" method="upgrade">
+	<name>plg_hikaserial_serialbyshipping</name>
+	<author>Anirudha Talmale</author>
+	<creationDate>2026-07</creationDate>
+	<version>1.0.0</version>
+	<description>PLG_HIKASERIAL_SERIALBYSHIPPING_DESC</description>
+
+	<files>
+		<filename plugin="serialbyshipping">serialbyshipping.php</filename>
+		<folder>language</folder>
+	</files>
+
+	<languages folder="language">
+		<language tag="en-GB">en-GB/en-GB.plg_hikaserial_serialbyshipping.ini</language>
+		<language tag="en-GB">en-GB/en-GB.plg_hikaserial_serialbyshipping.sys.ini</language>
+	</languages>
+
+	<config>
+		<fields name="params">
+			<fieldset name="basic">
+
+				<field name="shipping_ids"
+					type="sql"
+					multiple="true"
+					default="1,4,8,17,20,26"
+					query="SELECT shipping_id AS value, CONCAT(shipping_name, ' (#', shipping_id, ')') AS text FROM #__hikashop_shipping WHERE shipping_published=1 ORDER BY shipping_ordering ASC"
+					label="PLG_HIKASERIAL_SERIALBYSHIPPING_SHIPPING_IDS_LABEL"
+					description="PLG_HIKASERIAL_SERIALBYSHIPPING_SHIPPING_IDS_DESC" />
+
+				<field name="no_shipping_behaviour"
+					type="list"
+					default="block"
+					label="PLG_HIKASERIAL_SERIALBYSHIPPING_NOSHIP_LABEL"
+					description="PLG_HIKASERIAL_SERIALBYSHIPPING_NOSHIP_DESC">
+					<option value="block">PLG_HIKASERIAL_SERIALBYSHIPPING_NOSHIP_BLOCK</option>
+					<option value="send">PLG_HIKASERIAL_SERIALBYSHIPPING_NOSHIP_SEND</option>
+				</field>
+
+				<field name="debug_log"
+					type="radio"
+					layout="joomla.form.field.radio.switcher"
+					default="0"
+					label="PLG_HIKASERIAL_SERIALBYSHIPPING_DEBUG_LABEL"
+					description="PLG_HIKASERIAL_SERIALBYSHIPPING_DEBUG_DESC">
+					<option value="1">JYES</option>
+					<option value="0">JNO</option>
+				</field>
+
+			</fieldset>
+		</fields>
+	</config>
+</extension>

@@ -1,0 +1,5 @@
+# never commit client's proprietary HikaSerial source
+hikaserial_src/
+*_hikaserial.zip
+serials.php
+classes.zip
