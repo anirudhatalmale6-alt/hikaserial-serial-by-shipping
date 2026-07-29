@@ -1,29 +1,33 @@
-# HikaSerial – Send Tickets by Shipping Method
+# HikaSerial – Serials by Shipping Method
 
-A small Joomla plugin (HikaSerial group) that delivers the HikaSerial ticket
-(PDF or image serial) **only** for orders whose customer chose one of the allowed
-shipping methods (e.g. your "E-Mails" dispatch types). Orders that used any other
-shipping method still receive their normal HikaShop order e-mail — just without
-the ticket attached.
+A small Joomla plugin (HikaSerial group) that generates and delivers the HikaSerial
+serial/ticket **only** for orders whose customer chose one of the allowed shipping
+methods (e.g. your "E-Mails" dispatch types). Orders that used any other shipping
+method (e.g. delivery by post) get **no serial at all** — it is not generated, not
+shown in the customer's front-end order view, and not e-mailed.
 
 Built and verified against: **Joomla 5/6 · HikaShop 6.5.2 · HikaSerial 6.1.1 · PHP 8.4**
 
 ## How it works
 
-HikaSerial attaches the ticket by looping the order's serials inside its PDF/image
-generator, and for each one it fires an official rule hook:
+The plugin gates HikaSerial at two levels:
 
+**1. Generation (primary).** HikaSerial decides whether to assign serials when an
+order reaches its assignable status, from `class.order::preUpdate()` →
+`postUpdate()`. The plugin hooks `onSerialOrderPreUpdate` and, for orders whose
+shipping method is **not** in your allowed list, suppresses the assignment. No
+serial is created, so nothing appears in the customer's account/front-end or in the
+order e-mail — exactly what you want for "normal" postal orders.
+
+**2. Delivery (defence-in-depth).** In case a serial exists for any other reason,
+the official generator rule hooks also skip attaching the ticket:
 - `onCustomPdfSerialRule($serial, $params, &$do)` — PDF tickets
 - `onCustomAttachSerialRule($serial, $params, &$do)` — image/QR tickets
+- `onBeforeSerialMailSend` — strips any inline serials from the order e-mail.
 
-This plugin answers those hooks. It reads the order's shipping method and, if it
-is **not** in your allowed list, sets `$do = false` so HikaSerial simply skips
-attaching that ticket. A secondary `onBeforeSerialMailSend` gate strips any inline
-serials from the same e-mail as a safety net (covers text-mode serials too).
-
-Nothing else changes: HikaSerial still generates/assigns serials exactly as it does
-today, your ticket layout is untouched, and the default HikaSerial e-mail template
-is used as-is. **No HikaSerial settings need to be disabled.**
+For allowed (E-Mails) orders the plugin does nothing at all — HikaSerial generates,
+displays and e-mails the ticket exactly as it does today, with your ticket layout
+and default e-mail template untouched. **No HikaSerial settings need to be changed.**
 
 ## Install
 
@@ -42,16 +46,17 @@ That's it. No changes to HikaShop or HikaSerial configuration are required.
 
 1. Turn **Debug logging** ON.
 2. Place a test order using an **allowed** shipping method and mark it Paid →
-   the customer e-mail should include the PDF ticket as usual.
+   a serial is generated, shown in the customer's order/account, and the PDF ticket
+   is in the e-mail as usual.
 3. Place a test order using a **non-allowed** shipping method and mark it Paid →
-   the customer e-mail should arrive **without** the ticket.
+   **no serial** is generated, nothing is shown in the front-end, and the e-mail
+   arrives with no ticket.
 4. Check `administrator/logs/plg_hikaserial_serialbyshipping.php` — each decision
-   is logged ("ticket delivered" / "ticket skipped") with the order id.
+   is logged (e.g. "serial generation suppressed" / "ticket skipped") with the
+   order id.
 
 ## Notes / scope
 
-- The plugin gates **delivery** of the ticket by shipping method. HikaSerial still
-  internally assigns a serial to every paid order (its normal behaviour). If you
-  ever need non-Email orders to not consume a serial at all, that is a separate
-  change — ask and it can be added.
+- Primary behaviour is the **generation gate**: non-allowed orders never get a
+  serial, so nothing leaks into the front-end. The delivery hooks are a safety net.
 - Log file: `administrator/logs/plg_hikaserial_serialbyshipping.php`.

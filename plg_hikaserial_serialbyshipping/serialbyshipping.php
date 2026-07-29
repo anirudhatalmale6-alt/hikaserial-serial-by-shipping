@@ -1,23 +1,29 @@
 <?php
 /**
  * @package     plg_hikaserial_serialbyshipping
- * @version     1.0.0
+ * @version     1.1.0
  * @author      Anirudha Talmale
  * @license     GNU General Public License version 3 or later
  *
- * Gates HikaSerial ticket delivery by the order's shipping method.
+ * Gates HikaSerial ticket generation AND delivery by the order's shipping method.
  *
- * HikaSerial attaches the serial (e.g. a PDF event ticket) onto the HikaShop
- * order e-mail for every paid order and cannot restrict this per shipping
- * method. This plugin implements the official HikaSerial 6.1.0+ rule hooks
- * (onCustomPdfSerialRule / onCustomAttachSerialRule) to skip attaching the
- * ticket when the order's shipping method is NOT one of the allowed "E-Mails"
- * methods. A secondary onBeforeSerialMailSend gate strips any inline serials
- * from the same e-mail as a safety net.
+ * HikaSerial assigns a serial to every paid order and shows it in the customer's
+ * front-end / order e-mail, and cannot restrict this per shipping method. For an
+ * event-ticket shop that is wrong: a "normal" order shipped by post must not get
+ * a serial at all (otherwise the customer sees a ticket code they shouldn't).
  *
- * HikaSerial's own generation, the ticket layout, and the default e-mail
- * template all stay untouched — only the "should this order's ticket be
- * e-mailed?" decision is added.
+ * This plugin adds a shipping-method gate at two levels:
+ *   1. Generation — onSerialOrderPreUpdate: for orders whose shipping method is
+ *      NOT in the allowed "E-Mails" list, the serial is never assigned, so it
+ *      never appears in the front-end or the order e-mail.
+ *   2. Delivery (defence-in-depth) — the official onCustomPdfSerialRule /
+ *      onCustomAttachSerialRule hooks skip attaching the ticket, and
+ *      onBeforeSerialMailSend strips any inline serials, in case a serial exists
+ *      for any other reason.
+ *
+ * HikaSerial's generation logic, the ticket layout, and the default e-mail
+ * template all stay untouched — only the "does this order qualify?" decision is
+ * added.
  */
 
 defined('_JEXEC') or die('Restricted access');
@@ -30,6 +36,42 @@ class plgHikaserialSerialbyshipping extends CMSPlugin
 {
 	/** @var bool Load plugin language automatically. */
 	protected $autoloadLanguage = true;
+
+	/**
+	 * GENERATION GATE. Fired by HikaSerial in class.order::preUpdate(), right
+	 * before it decides whether to assign serials for the order (postUpdate).
+	 *
+	 * For orders whose shipping method is NOT in the allowed list, we neutralise
+	 * the status transition HikaSerial checks (by making the "old" status equal
+	 * the current one). HikaSerial then sees no transition into an assignable
+	 * status and never assigns a serial — so nothing shows in the customer's
+	 * front-end or order e-mail. Allowed orders are left completely untouched.
+	 *
+	 * @param   bool    $new                 Whether this is a new order.
+	 * @param   object  $order               By-ref order; has serial_data set.
+	 * @param   array   $order_serial_params  By-ref serial params (unused here).
+	 * @return  void
+	 */
+	public function onSerialOrderPreUpdate($new, &$order, &$order_serial_params)
+	{
+		if (empty($order) || !isset($order->order_status) || $order->order_status === '') {
+			return;
+		}
+		// serial_data is created by HikaSerial just before this hook; if it is
+		// missing, HikaSerial will not assign anyway — nothing to do.
+		if (!isset($order->serial_data)) {
+			return;
+		}
+
+		if ($this->isOrderShippingAllowed($order)) {
+			return; // qualifies — let HikaSerial generate as normal.
+		}
+
+		// Does not qualify: suppress assignment for this order.
+		$order->serial_data->old_order_status = $order->order_status;
+		$this->log('[generation] Order ' . (int) (isset($order->order_id) ? $order->order_id : 0)
+			. ': shipping method not allowed — serial generation suppressed.');
+	}
 
 	/**
 	 * HikaSerial PDF-generator rule. Fired per serial while the PDF ticket is
@@ -140,7 +182,7 @@ class plgHikaserialSerialbyshipping extends CMSPlugin
 	/**
 	 * Is the given order's shipping method one of the allowed "E-Mails" methods?
 	 * Result is cached per request. When no shipping method is configured on the
-	 * plugin, nothing is blocked.
+	 * plugin, nothing is blocked. Used by the delivery gates (order id known).
 	 */
 	protected function isShippingAllowed($orderId)
 	{
@@ -149,25 +191,49 @@ class plgHikaserialSerialbyshipping extends CMSPlugin
 		if (isset($cache[$orderId])) {
 			return $cache[$orderId];
 		}
+		return $cache[$orderId] = $this->decideAllowed($this->getOrderShippingIds($orderId), $orderId);
+	}
 
+	/**
+	 * Same decision for the generation gate, where the order object is available
+	 * but the row may not be in the DB yet (order creation). Reads the shipping
+	 * id(s) from the DB when the order id exists, otherwise from the object.
+	 */
+	protected function isOrderShippingAllowed($order)
+	{
+		$orderId = (isset($order->order_id)) ? (int) $order->order_id : 0;
+
+		$orderShipping = array();
+		if ($orderId > 0) {
+			$orderShipping = $this->getOrderShippingIds($orderId);
+		}
+		if (empty($orderShipping)) {
+			$orderShipping = $this->parseShippingIds(isset($order->order_shipping_id) ? $order->order_shipping_id : '');
+		}
+
+		return $this->decideAllowed($orderShipping, $orderId);
+	}
+
+	/**
+	 * Core allow/deny decision given the order's shipping id(s).
+	 */
+	protected function decideAllowed($orderShipping, $orderId = 0)
+	{
 		$configured = $this->getAllowedShippingIds();
 		if (empty($configured)) {
 			// Misconfiguration guard: an empty allow-list means "don't gate".
 			$this->log('No shipping method configured in plugin settings; not gating.', Log::WARNING);
-			return $cache[$orderId] = true;
+			return true;
 		}
-
-		$orderShipping = $this->getOrderShippingIds($orderId);
 
 		if (empty($orderShipping)) {
 			// Order has no shipping method — behaviour is configurable.
 			$allowed = ($this->params->get('no_shipping_behaviour', 'block') === 'send');
-			$this->log('Order ' . $orderId . ' has no shipping method; ' . ($allowed ? 'sending' : 'blocking') . ' per settings.');
-			return $cache[$orderId] = $allowed;
+			$this->log('Order ' . (int) $orderId . ' has no shipping method; ' . ($allowed ? 'allowing' : 'blocking') . ' per settings.');
+			return $allowed;
 		}
 
-		$allowed = count(array_intersect($configured, $orderShipping)) > 0;
-		return $cache[$orderId] = $allowed;
+		return count(array_intersect($configured, $orderShipping)) > 0;
 	}
 
 	/**
@@ -207,9 +273,23 @@ class plgHikaserialSerialbyshipping extends CMSPlugin
 			return array();
 		}
 
+		return $this->parseShippingIds($raw);
+	}
+
+	/**
+	 * Parse a HikaShop shipping id value (single, comma-separated string, or
+	 * array) into a list of positive ints.
+	 */
+	protected function parseShippingIds($value)
+	{
+		if (is_array($value)) {
+			$parts = $value;
+		} else {
+			$parts = ($value === '' || $value === null) ? array() : explode(',', (string) $value);
+		}
 		$ids = array();
-		foreach (explode(',', $raw) as $sid) {
-			$sid = (int) trim($sid);
+		foreach ($parts as $sid) {
+			$sid = (int) trim((string) $sid);
 			if ($sid > 0) {
 				$ids[] = $sid;
 			}
