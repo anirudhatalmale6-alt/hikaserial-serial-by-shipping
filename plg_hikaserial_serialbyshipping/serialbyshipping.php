@@ -1,7 +1,7 @@
 <?php
 /**
  * @package     plg_hikaserial_serialbyshipping
- * @version     1.2.0
+ * @version     1.3.0
  * @author      Anirudha Talmale
  * @license     GNU General Public License version 3 or later
  *

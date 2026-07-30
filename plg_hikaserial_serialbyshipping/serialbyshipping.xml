@@ -3,11 +3,12 @@
 	<name>Serials by Shipping - HikaSerial plugin</name>
 	<author>Anirudha Talmale</author>
 	<creationDate>2026-07</creationDate>
-	<version>1.2.0</version>
+	<version>1.3.0</version>
 	<description>PLG_HIKASERIAL_SERIALBYSHIPPING_DESC</description>
 
 	<files>
 		<filename plugin="serialbyshipping">serialbyshipping.php</filename>
+		<folder>fields</folder>
 		<folder>language</folder>
 	</files>
 
@@ -21,10 +22,10 @@
 			<fieldset name="basic">
 
 				<field name="shipping_ids"
-					type="sql"
+					type="hikashippingmethods"
+					addfieldpath="/plugins/hikaserial/serialbyshipping/fields"
 					multiple="true"
 					default="1,4,8,17,20,26"
-					query="SELECT shipping_id AS value, CONCAT(shipping_name, ' (#', shipping_id, ')') AS text FROM #__hikashop_shipping WHERE shipping_published=1 ORDER BY shipping_ordering ASC"
 					label="PLG_HIKASERIAL_SERIALBYSHIPPING_SHIPPING_IDS_LABEL"
 					description="PLG_HIKASERIAL_SERIALBYSHIPPING_SHIPPING_IDS_DESC" />
 
